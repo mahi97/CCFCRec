@@ -4,6 +4,7 @@ import sys
 import pickle
 import torch
 import torch.utils.data
+# import torch.utils.data
 from torch import nn
 import torch.nn.functional as F
 from preprocess import serial_asin_category
@@ -15,6 +16,8 @@ import time
 from support import serialize_user
 from test import Validate
 from myargs import get_args, args_tostring
+import wandb
+
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -161,6 +164,12 @@ def train(model, train_loader, optimizer, valida, args, model_save_dir):
             total_loss.backward()
             optimizer.step()
             i_batch += 1
+            wandb.log({
+                    'epoch': i_epoch,
+                    'i_batch': i_batch,
+                    'total_loss': total_loss.item(),
+                    'contrast_sum': contrast_sum,
+            })
             if i_batch % args.save_batch_time == 0:
                 model.eval()
                 print("[{},/13931603]total_loss:,{},{},s".format(i_batch*1024, total_loss.item(), int(time.time()-batch_time)))
@@ -169,9 +178,25 @@ def train(model, train_loader, optimizer, valida, args, model_save_dir):
                 with open(test_save_path, 'a+') as f:
                     f.write("{},{},{},{},{},{},{},{}\n".format(total_loss.item(), contrast_sum, hr_5, hr_10, hr_20, ndcg_5, ndcg_10, ndcg_20))
                 # 保存模型
+
+                wandb.log({
+                    'epoch': i_epoch,
+                    'i_batch': i_batch,
+                    'total_loss': total_loss.item(),
+                    'batch_time': int(time.time()-batch_time),
+                    'contrast_sum': contrast_sum,
+                    'hr_5': hr_5,
+                    'hr_10': hr_10,
+                    'hr_20': hr_20,
+                    'ndcg_5': ndcg_5,
+                    'ndcg_10':ndcg_10,
+                    'ndcg_20': ndcg_20
+                })
                 batch_time = time.time()
                 save_index += 1
-                torch.save(model.state_dict(), model_save_dir + '/' + str(save_index)+".pt")
+                model_save_path = model_save_dir + '/' + str(save_index)+".pt"
+                torch.save(model.state_dict(), model_save_path)
+                wandb.save(model_save_path)
 
 
 if __name__ == '__main__':
@@ -180,9 +205,12 @@ if __name__ == '__main__':
     os.makedirs(save_dir)
     # args
     args = get_args()
+    wandb.init(project='MusicRec', config=args)
+    wandb.run.name = 'MusicRec b{} l{} -- {}'.format(args.batch_size, args.learning_rate, wandb.run.id)
+    wandb.run.save()
     print("progress start at:", time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
     train_path = "data/train_withneg_rating.csv"
-    valid_path = 'data/validate_rating.csv'
+    vliad_path = 'data/validate_rating.csv'
     train_df = pd.read_csv(train_path)
     total_user_set = train_df['reviewerID']
     user_ser_dict = serialize_user(total_user_set)
@@ -202,7 +230,7 @@ if __name__ == '__main__':
     print("模型超参数:", args_tostring(args))
     myModel = CCFCRec(args)
     optimizer = torch.optim.Adam(myModel.parameters(), lr=args.learning_rate, weight_decay=0.1)
-    validator = Validate(validate_csv=valid_path, user_serialize_dict=user_ser_dict, img=img_feature_dict,
+    validator = Validate(validate_csv=vliad_path, user_serialize_dict=user_ser_dict, img=img_feature_dict,
                          genres=asin_category_int_map, category_num=category_ser_map.__len__())
     train(myModel, train_loader, optimizer, validator, args, save_dir)
 
