@@ -3,7 +3,7 @@ import argparse
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=1024, help="batch_size")
+    parser.add_argument('--batch_size', type=int, default=4096, help="batch_size")
     parser.add_argument('--learning_rate', type=float, default=0.000005, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.1, help='weight decay')
     parser.add_argument('--positive_number', type=int, default=10, help='contrast positive number')
@@ -22,7 +22,7 @@ def get_args():
     parser.add_argument('--pretrain_update', type=bool, default=False, help='u/i pretrain embedding update')
     parser.add_argument('--contrast_flag', type=bool, default=True, help='contrast job flag')
     parser.add_argument('--user_flag', type=bool, default=False, help='use user to q_v_c flag')
-    parser.add_argument('--save_batch_time', type=int, default=3000, help='every batch time save the model')
+    parser.add_argument('--save_batch_time', type=int, default=100, help='every batch time save the model')
     args = parser.parse_args()
     return args
 

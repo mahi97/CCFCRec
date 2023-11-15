@@ -182,7 +182,7 @@ if __name__ == '__main__':
     args = get_args()
     print("progress start at:", time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
     train_path = "data/train_withneg_rating.csv"
-    vliad_path = 'data/validate_rating.csv'
+    valid_path = 'data/validate_rating.csv'
     train_df = pd.read_csv(train_path)
     total_user_set = train_df['reviewerID']
     user_ser_dict = serialize_user(total_user_set)
@@ -202,7 +202,7 @@ if __name__ == '__main__':
     print("模型超参数:", args_tostring(args))
     myModel = CCFCRec(args)
     optimizer = torch.optim.Adam(myModel.parameters(), lr=args.learning_rate, weight_decay=0.1)
-    validator = Validate(validate_csv=vliad_path, user_serialize_dict=user_ser_dict, img=img_feature_dict,
+    validator = Validate(validate_csv=valid_path, user_serialize_dict=user_ser_dict, img=img_feature_dict,
                          genres=asin_category_int_map, category_num=category_ser_map.__len__())
     train(myModel, train_loader, optimizer, validator, args, save_dir)
 
