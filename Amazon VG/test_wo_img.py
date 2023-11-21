@@ -87,7 +87,6 @@ class Validate:
             genres = torch.full((self.category_num, 1), -1)
             genres_index = self.genres_dict.get(it)
             genres[genres_index] = 1
-            genres = genres.squeeze(dim=1)
             genres = torch.tensor(genres)
             genres = genres.to(device)
             with torch.no_grad():

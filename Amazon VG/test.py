@@ -23,8 +23,8 @@ def get_random_user_rank_list(model, genres, image_feature, k):
 
 def get_similar_user_speed(model, genres, image_feature, k):
     genres = genres.unsqueeze(dim=0)
-    img_feature = image_feature.unsqueeze(dim=0)
-    q_v_c = model(genres, img_feature, 1)
+    # img_feature = image_feature.unsqueeze(dim=0)
+    q_v_c = model(genres, 1)
     user_emb = model.user_embedding
     ratings = torch.mul(user_emb, q_v_c).sum(dim=1)
     index = torch.argsort(-ratings)

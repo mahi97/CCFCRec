@@ -12,10 +12,16 @@ def serial_asin_category(pkl_name='data/asin_int_category.pkl'):
         return data['asin_category_int_map'], data['category_ser_map']
     asin_df = pd.read_csv("data/asin.csv")
     category_set = set([])
+    cat_dict = {}
     for idx, row in asin_df.iterrows():
         cat = row['category'].split(',')
         for i in cat:
-            category_set.add(i)
+            if i in cat_dict:
+                cat_dict[i] += 1
+            else:
+                cat_dict[i] = 1
+    for key, value in cat_dict.items():
+        category_set.add(key)
     # 用顺序给category编上序号，把asin中的category字符串转换为数字
     idx = 0
     category_ser_map = {}
@@ -28,7 +34,9 @@ def serial_asin_category(pkl_name='data/asin_int_category.pkl'):
         asin = row['asin']
         tmp_list = []
         for i in cat:
-            tmp_list.append(category_ser_map.get(i))
+            if i in category_ser_map:
+                tmp_list.append(category_ser_map.get(i))
         asin_category_int_map[asin] = tmp_list
     with open(pkl_name, "wb") as file:
         pickle.dump({'asin_category_int_map': asin_category_int_map, 'category_ser_map': category_ser_map}, file)
+    return asin_category_int_map, category_ser_map

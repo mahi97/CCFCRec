@@ -3,8 +3,8 @@ import argparse
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=8024, help="batch_size")
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--batch_size', type=int, default=1024, help="batch_size")
+    parser.add_argument('--learning_rate', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.1, help='weight decay')
     parser.add_argument('--positive_number', type=int, default=5, help='contrast positive number')
     parser.add_argument('--negative_number', type=int, default=40, help='contrast negative number')

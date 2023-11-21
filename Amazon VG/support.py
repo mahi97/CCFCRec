@@ -131,7 +131,7 @@ class RatingDataset(torch.utils.data.Dataset):
         # 处理 item genres
         genres = torch.full((self.category_num, 1), -1)
         genres_index = self.genres_dict.get(item)
-        genres = genres.to(device)
+        # genres = genres.to(device)
         genres[genres_index] = 1
         genres = genres.squeeze(dim=1)
         # 处理 item feature

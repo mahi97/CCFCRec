@@ -14,6 +14,7 @@ from support_wo_img import RatingDataset, serialize_user
 from test_wo_img import Validate
 from myargs import get_args, args_tostring
 import wandb
+import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -71,6 +72,7 @@ class CCFCRec(nn.Module):
         z_v_copy = z_v.repeat(batch_size, 1, 1)
         z_v_squeeze = z_v_copy.squeeze(dim=2).to(device)
         neg_inf = torch.full(z_v_squeeze.shape, -1e6).to(device)
+        attribute = attribute.squeeze(dim=2)
         z_v_mask = torch.where(attribute != -1, z_v_squeeze, neg_inf)
         attr_attention_weight = torch.softmax(z_v_mask, dim=1)
         final_attr_emb = torch.matmul(attr_attention_weight, self.attr_matrix)
@@ -95,21 +97,52 @@ def train(model, train_loader, optimizer, valida, args, model_save_dir):
     with open(test_save_path, 'a+') as f:
         f.write("loss,contrast_sum,hr@5,hr@10,hr@20,ndcg@5,ndcg@10,ndcg@20\n")
     save_index = 0
+
+    # user, item, genres, neg_user, positive_items_list, negative_item_list, self_neg_list = train_loader.run_all()
+    user_batch = dataset['user'] #.to(device)
+    item_batch = dataset['item'] #.to(device)
+    genres_batch = dataset['genres'] #.to(device)
+    neg_user_batch = dataset['neg_user'] #.to(device)
+    positive_items_list_batch = dataset['positive_items'] #.to(device)
+    negative_item_list_batch = dataset['negative_item'] #.to(device)
+    self_neg_list_batch = dataset['self_neg'] #.to(device)
+
+
+
+    train_ds_size = dataset['user'].shape[0]
+    batch_size = args.batch_size
+    steps_per_epoch = train_ds_size // batch_size
+    #
+    perms = np.random.permutation(train_ds_size)
+    perms = perms[:steps_per_epoch * batch_size]  # skip incomplete batch
+    perms = perms.reshape((steps_per_epoch, batch_size))
+    perms = torch.tensor(perms) #.to(device)
+    # rng, rng_net = jax.random.split(rng)
+    #
+    # # Rearrange your data once according to the permuted indices, instead of in every step
+    user_batch = user_batch[perms]
+    item_batch = item_batch[perms]
+    genres_batch = genres_batch[perms, :, :]
+    neg_user_batch = neg_user_batch[perms]
+    positive_items_list_batch = positive_items_list_batch[perms, :]
+    negative_item_list_batch = negative_item_list_batch[perms, :, :]
+    self_neg_list_batch = self_neg_list_batch[perms, :]
+    model = model.to(device)
     for i_epoch in range(args.epoch):
         i_batch = 0
         batch_time = time.time()
-        for user, item, item_genres, neg_user, positive_item_list, negative_item_list, self_neg_list in tqdm(train_loader):
+        for i in tqdm(range(steps_per_epoch)):
+            # Now you can simply slice your array instead of using jnp.take
+            user = user_batch[i].to(device)
+            item = item_batch[i].to(device)
+            item_genres = genres_batch[i].to(device)
+            neg_user = neg_user_batch[i].to(device)
+            positive_item_list = positive_items_list_batch[i].to(device)
+            negative_item_list = negative_item_list_batch[i].to(device)
+            self_neg_list = self_neg_list_batch[i].to(device)
             optimizer.zero_grad()
             model.train()
             # allocate memory cpu to gpu
-            model = model.to(device)
-            user = user.to(device)
-            item = item.to(device)
-            item_genres = item_genres.to(device)
-            # item_img_feature = item_img_feature.to(device)
-            neg_user = neg_user.to(device)
-            positive_item_list = positive_item_list.to(device)
-            negative_item_list = negative_item_list.to(device)
             # run model
             q_v_c = model(item_genres, user.shape[0])
             q_v_c_unsqueeze = q_v_c.unsqueeze(dim=1)
@@ -208,31 +241,32 @@ if __name__ == '__main__':
     train_path = "data/train_withneg_rating.csv"
     valid_path = 'data/validate_rating.csv'
     train_df = pd.read_csv(train_path)
-    genre_df = pd.read_csv("data/final_song_genre_hierarchy.csv")
     total_user_set = train_df['reviewerID']
     user_ser_dict = serialize_user(total_user_set)
-    genre_set = genre_df['genre']
-    # asin_category_int_map, category_ser_map = serial_asin_category()
+
+    asin_category_int_map, category_ser_map = serial_asin_category()
     # img_feature_dict = get_img_feature_pickle()
     # write internal variable
-    # with open(save_dir+"/save_dict.pkl", "wb") as file:
-    #     save_dict = {
-    #         # 'img_feature_dict': img_feature_dict,
-    #         'asin_category_int_map': asin_category_int_map,
-    #         'category_ser_map_len': category_ser_map.__len__(),
-    #         'user_ser_dict': user_ser_dict
-    #         }
-    #     pickle.dump(save_dict, file)
+    with open(save_dir+"/save_dict.pkl", "wb") as file:
+        save_dict = {
+            # 'img_feature_dict': img_feature_dict,
+            'asin_category_int_map': asin_category_int_map,
+            'category_ser_map_len': category_ser_map.__len__(),
+            'user_ser_dict': user_ser_dict
+            }
+        pickle.dump(save_dict, file)
     # load dataset
-    dataSet = RatingDataset(train_df, genre_set, len(genre_set),
+    dataSet = RatingDataset(train_df, asin_category_int_map, category_ser_map.__len__(),
                             user_ser_dict, args.positive_number, args.negative_number)
     args.user_number = dataSet.user_number
     args.item_number = dataSet.item_number
-    train_loader = torch.utils.data.DataLoader(dataSet, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    if os.path.exists('data/dataset-0.pt'):
+        dataset = torch.load('data/dataset-0.pt')
+    # train_loader = torch.utils.data.DataLoader(dataSet, batch_size=args.batch_size, shuffle=True, num_workers=0)
     print("模型超参数:", args_tostring(args))
     myModel = CCFCRec(args)
     optimizer = torch.optim.Adam(myModel.parameters(), lr=args.learning_rate, weight_decay=0.1)
     validator = Validate(validate_csv=valid_path, user_serialize_dict=user_ser_dict,
-                         genres=genre_set, category_num=genre_set.__len__())
-    train(myModel, train_loader, optimizer, validator, args, save_dir)
+                         genres=asin_category_int_map, category_num=category_ser_map.__len__())
+    train(myModel, dataset, optimizer, validator, args, save_dir)
 
